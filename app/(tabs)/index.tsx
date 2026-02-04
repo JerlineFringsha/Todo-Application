@@ -1,33 +1,44 @@
-import useTheme, { ColorScheme } from "@/hooks/useTheme";
-import { StatusBar, Alert, FlatList, Text, View, TouchableOpacity } from "react-native";
 import { createHomeStyles } from "@/assets/styles/home.styles";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { Doc, Id } from "@/convex/_generated/dataModel";
-import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
-import Header from "@/components/Header";
-import TodoInput from "@/components/TodoInput";
-import LoadingSpinner from "@/components/LoadingSpinner";
+import { useState } from "react";
 import EmptyState from "@/components/EmptyState";
-import { useQuery, useMutation } from "convex/react";
+import Header from "@/components/Header";
+import LoadingSpinner from "@/components/LoadingSpinner";
+import TodoInput from "@/components/TodoInput";
 import { api } from "@/convex/_generated/api";
+import { Doc, Id } from "@/convex/_generated/dataModel";
+import useTheme from "@/hooks/useTheme";
+import { Ionicons } from "@expo/vector-icons";
+import { useMutation, useQuery } from "convex/react";
+import { LinearGradient } from "expo-linear-gradient";
+import {
+  TextInput,
+  Alert,
+  FlatList,
+  StatusBar,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 type Todo = Doc<"todos">;
 
 export default function Index() {
-  const {colors} = useTheme();
+  const {toggleDarkMode,colors, isDarkMode} = useTheme();
+  const [editingId, setEditingId] = useState<Id<"todos"> | null>(null);
+  const [editText, setEditText] = useState("");
 
-  const todos =useQuery(api.todos.getTodos);
+  const todos = useQuery(api.todos.getTodos);
   const toggleTodo = useMutation(api.todos.toggleTodo);
   const deleteTodo = useMutation(api.todos.deleteTodo);
-  
+  const updateTodo = useMutation(api.todos.updateTodo);
 
   const isLoading = todos === undefined;
-  if(isLoading) return <LoadingSpinner />;
+  if (isLoading) return <LoadingSpinner />;
 
   const homeStyles = createHomeStyles(colors);
 
-    const handleToggleTodo = async (id: Id<"todos">) => {
+  const handleToggleTodo = async (id: Id<"todos">) => {
     try {
       await toggleTodo({ id });
     } catch (error) {
@@ -39,12 +50,39 @@ export default function Index() {
   const handleDeleteTodo = async (id: Id<"todos">) => {
     Alert.alert("Delete Todo", "Are you sure you want to delete this todo?", [
       { text: "Cancel", style: "cancel" },
-      { text: "Delete", style: "destructive", onPress: () => deleteTodo({ id }) },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => deleteTodo({ id }),
+      },
     ]);
   };
 
+  const handleEditTodo = (todo: Todo) => {
+    setEditText(todo.text);
+    setEditingId(todo._id);
+  };
+
+  const handleSaveEdit = async () => {
+    if (editingId) {
+      try {
+        await updateTodo({ id: editingId, text: editText.trim() });
+        setEditingId(null);
+        setEditText("");
+      } catch (error) {
+        console.log("Error updating todo", error);
+        Alert.alert("Error", "Failed to update todo");
+      }
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setEditText("");
+  };
+
   const renderTodoItem = ({ item }: { item: Todo }) => {
-    // const isEditing = editingId === item._id;
+    const isEditing = editingId === item._id;
     return (
       <View style={homeStyles.todoItemWrapper}>
         <LinearGradient
@@ -68,7 +106,7 @@ export default function Index() {
               {item.isCompleted && <Ionicons name="checkmark" size={18} color="#fff" />}
             </LinearGradient>
           </TouchableOpacity>
-{/* 
+
           {isEditing ? (
             <View style={homeStyles.editContainer}>
               <TextInput
@@ -97,7 +135,6 @@ export default function Index() {
               </View>
             </View>
           ) : (
-           */}
             <View style={homeStyles.todoTextContainer}>
               <Text
                 style={[
@@ -113,48 +150,42 @@ export default function Index() {
               </Text>
 
               <View style={homeStyles.todoActions}>
-                <TouchableOpacity 
-                // onPress={() => handleEditTodo(item)} 
-                activeOpacity={0.8}>
+                <TouchableOpacity onPress={() => handleEditTodo(item)} activeOpacity={0.8}>
                   <LinearGradient colors={colors.gradients.warning} style={homeStyles.actionButton}>
                     <Ionicons name="pencil" size={14} color="#fff" />
                   </LinearGradient>
                 </TouchableOpacity>
-                <TouchableOpacity
-                 onPress={() => {    console.log("Trash icon pressed, item._id:", item._id);
-handleDeleteTodo(item._id)} }
-                 activeOpacity={0.8}>
+                <TouchableOpacity onPress={() => handleDeleteTodo(item._id)} activeOpacity={0.8}>
                   <LinearGradient colors={colors.gradients.danger} style={homeStyles.actionButton}>
                     <Ionicons name="trash" size={14} color="#fff" />
                   </LinearGradient>
                 </TouchableOpacity>
               </View>
             </View>
-          {/* )} */} 
+          )}
         </LinearGradient>
       </View>
     );
   };
   return (
-    <LinearGradient colors={colors.gradients.background} style={{flex:1}}>
-    <StatusBar barStyle={colors.statusBarStyle}/>
-    <SafeAreaView
-      style={homeStyles.container}
-    >
-      <Header/>
-      <TodoInput/>
+    <LinearGradient colors={colors.gradients.background} style={{ flex: 1 }}>
+      <StatusBar barStyle={colors.statusBarStyle} />
+      <SafeAreaView style={homeStyles.container}>
+        <Header />
+        <TodoInput />
+              <TouchableOpacity onPress={toggleDarkMode}>
+        <Text >Toggle to {isDarkMode ? "Light" : "Dark"} Mode</Text>
+      </TouchableOpacity>
         <FlatList
           data={todos}
           renderItem={renderTodoItem}
-          keyExtractor={(item) => item._id}
+          keyExtractor={(item) => item._id.toString()}
           style={homeStyles.todoList}
           contentContainerStyle={homeStyles.todoListContent}
           ListEmptyComponent={<EmptyState />}
           showsVerticalScrollIndicator={false}
         />
-    </SafeAreaView>
+      </SafeAreaView>
     </LinearGradient>
   );
 }
-
-
